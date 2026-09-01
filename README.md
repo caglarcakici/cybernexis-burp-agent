@@ -1,4 +1,4 @@
-# Cybernexis Agent
+# Cybernexis Burp Suite Pro Agent
 
 **Agentic security testing inside [Burp Suite](https://portswigger.net/burp), driven by a model you run locally with [Ollama](https://ollama.com).**
 
