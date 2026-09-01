@@ -1,4 +1,4 @@
-# Cybernexis Burp Suite Agent
+# Cybernexis Agent
 
 **Agentic security testing inside [Burp Suite](https://portswigger.net/burp), driven by a model you run locally with [Ollama](https://ollama.com).**
 
@@ -19,6 +19,18 @@ flowchart LR
     Tools --> Burp[Burp Suite]
     Burp -->|scope · HTTP · findings| Chat
 ```
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/chat.png" alt="Cybernexis Agent chat" width="880">
+</p>
+<p align="center">
+  <img src="docs/screenshots/tool-card.png" alt="Tool call with Burp HTTP editor" width="880">
+</p>
+<p align="center">
+  <img src="docs/screenshots/settings.png" alt="Cybernexis Settings" width="880">
+</p>
 
 ## Features
 
