@@ -1,6 +1,6 @@
 /*
  * Optional Burp passive scan check: when enabled in Settings, in-scope HTTP
- * exchanges are sent to the local model and any JSON findings become native
+ * exchanges are sent to the selected model and any JSON findings become native
  * Burp issues. When disabled (the default) doCheck returns immediately and
  * nothing is sent to the model.
  */

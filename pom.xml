@@ -10,7 +10,7 @@
   <packaging>jar</packaging>
 
   <name>Cybernexis Agent</name>
-  <description>Agentic security-testing extension for Burp Suite, driven by a local Ollama model.</description>
+  <description>Agentic security-testing extension for Burp Suite with local or remote model providers.</description>
 
   <properties>
     <maven.compiler.source>11</maven.compiler.source>

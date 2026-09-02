@@ -1,5 +1,5 @@
 /*
- * Montoya entry point. Wires configuration, the tool registry, the Ollama client,
+ * Montoya entry point. Wires configuration, the tool registry, the model client,
  * the agent loop, and the Swing UI, then registers the Cybernexis suite tab.
  */
 package com.cybernexis.agent;
