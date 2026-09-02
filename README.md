@@ -9,16 +9,39 @@
 
 Cybernexis Agent is a Burp extension: chat with an LLM that can inspect scope, sitemap, and issues, send requests, fuzz, spray credentials, and write findings back into Burp. Traffic and prompts stay on your machine.
 
-It is **not** an LLM. You bring the model (any tool-capable Ollama model). It is **not** affiliated with PortSwigger.
+It is **not** an LLM. You bring the model (any tool-capable with Ollama). It is **not** affiliated with PortSwigger.
 
-```mermaid
-flowchart LR
-    You((You)) --> Chat[Cybernexis chat]
-    Chat --> Ollama[Local Ollama]
-    Ollama --> Tools[Tools]
-    Tools --> Burp[Burp Suite]
-    Burp -->|scope · HTTP · findings| Chat
-```
+flowchart TD
+    U([Security Analyst])
+
+    subgraph C[Cybernexis Burp Agent]
+        UI[Chat & Task Sessions]
+        LOOP[Agent Loop<br/>planning · approvals · context]
+        TOOLS[Security Tools<br/>HTTP · recon · fuzzing · analysis]
+        UI --> LOOP
+        LOOP --> TOOLS
+        TOOLS --> LOOP
+    end
+
+    subgraph L[Local AI Runtime]
+        O[Ollama<br/>local tool-capable model]
+    end
+
+    B[Burp Suite Professional<br/>scope · traffic · sitemap · issues]
+
+    U --> UI
+    LOOP <-->|prompts · tool calls| O
+    TOOLS <-->|Montoya API| B
+    B -->|requests · responses · findings| LOOP
+
+    classDef actor fill:#18202b,stroke:#8b98a8,color:#fff,stroke-width:1px;
+    classDef agent fill:#172b4d,stroke:#4c9aff,color:#fff,stroke-width:1px;
+    classDef runtime fill:#263238,stroke:#7cb342,color:#fff,stroke-width:1px;
+    classDef burp fill:#4a2118,stroke:#ff7043,color:#fff,stroke-width:1px;
+    class U actor;
+    class UI,LOOP,TOOLS agent;
+    class O runtime;
+    class B burp;
 
 ## Screenshots
 
