@@ -37,6 +37,7 @@ import com.cybernexis.agent.loop.ToolCall;
 import com.cybernexis.agent.ollama.OllamaClient;
 import com.cybernexis.agent.tools.ToolContext;
 import com.cybernexis.agent.tools.ToolDescriptor;
+import com.cybernexis.agent.tools.ToolNames;
 import com.cybernexis.agent.tools.ToolResult;
 
 public class SessionPanel extends JPanel implements AgentLoop.Listener {
@@ -795,7 +796,7 @@ public class SessionPanel extends JPanel implements AgentLoop.Listener {
 
     private void addAutoChip(String tool, String by) {
         SwingUtilities.invokeLater(() -> {
-            Chip chip = new Chip("\u2713 Approved by " + by + " mode \u00b7 " + tool,
+            Chip chip = new Chip("\u2713 Approved by " + by + " mode \u00b7 " + ToolNames.displayName(tool),
                     Theme.success(), Theme.blend(Theme.surface(), Theme.success(), 0.16))
                     .withDot(Theme.success());
             JPanel row = new JPanel(new BorderLayout());

@@ -5,6 +5,10 @@
 package com.cybernexis.agent.ui;
 
 import java.awt.BorderLayout;
+import java.awt.Component;
+import java.awt.Cursor;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
@@ -12,12 +16,15 @@ import java.util.Arrays;
 import java.util.List;
 
 import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
+import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 
@@ -27,8 +34,11 @@ import com.cybernexis.agent.ollama.OllamaClient;
 
 public class ConfigPanel extends JPanel {
 
+    private static final int LABEL_WIDTH = 170;
+
     private final Config config;
     private final ConfigStore store;
+    private final JPanel form = new JPanel();
 
     private final JComboBox<ProviderOption> provider = new JComboBox<>(new ProviderOption[]{
             new ProviderOption(Config.PROVIDER_OLLAMA, "Ollama native"),
@@ -38,6 +48,8 @@ public class ConfigPanel extends JPanel {
     private final JTextField baseUrl = new JTextField(28);
     private final JTextField chatEndpoint = new JTextField(28);
     private final JTextField modelsEndpoint = new JTextField(28);
+    private final JButton advancedToggle = new JButton("Advanced");
+    private final JPanel advancedPanel = new JPanel();
     private final JComboBox<String> model = new JComboBox<>();
     private final JPasswordField apiToken = new JPasswordField(28);
     private final JTextField temperature = new JTextField(6);
@@ -51,6 +63,7 @@ public class ConfigPanel extends JPanel {
             "Passive scanner — send in-scope traffic to the selected model (off until enabled)");
     private final JLabel status = new JLabel(" ");
     private String previousProvider;
+    private boolean advancedOpen;
 
     public ConfigPanel(Config config, ConfigStore store) {
         super(new BorderLayout());
@@ -58,53 +71,69 @@ public class ConfigPanel extends JPanel {
         this.store = store;
         model.setEditable(true);
 
-        JPanel form = new JPanel(new GridBagLayout());
+        form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS));
         form.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-        GridBagConstraints c = new GridBagConstraints();
-        c.insets = new Insets(4, 4, 4, 4);
-        c.anchor = GridBagConstraints.WEST;
+        form.setAlignmentX(LEFT_ALIGNMENT);
 
-        int row = 0;
-        addRow(form, c, row++, "Provider protocol:", provider);
-        addRow(form, c, row++, "Base URL:", baseUrl);
-        addRow(form, c, row++, "Chat endpoint:", chatEndpoint);
-        addRow(form, c, row++, "Models endpoint:", modelsEndpoint);
-        addRow(form, c, row++, "Model:", model);
-        addRow(form, c, row++, "API token (optional):", apiToken);
-        addRow(form, c, row++, "Temperature:", temperature);
-        addRow(form, c, row++, "Max tokens:", maxTokens);
-        addRow(form, c, row++, "Max steps:", maxSteps);
-        addRow(form, c, row++, "Timeout (s):", timeout);
-        addRow(form, c, row++, "Context budget (chars):", contextBudget);
-        addRow(form, c, row++, "Default mode:", defaultMode);
+        form.add(labeledRow("Provider protocol:", provider));
+        form.add(labeledRow("Base URL:", baseUrl));
 
-        c.gridx = 1;
-        c.gridy = row++;
-        form.add(enforceScope, c);
-        c.gridy = row++;
-        form.add(passiveAiScan, c);
+        advancedToggle.setBorderPainted(false);
+        advancedToggle.setContentAreaFilled(false);
+        advancedToggle.setFocusPainted(false);
+        advancedToggle.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        advancedToggle.setForeground(Theme.mutedText());
+        advancedToggle.setFont(Theme.plain(12f));
+        advancedToggle.setMargin(new Insets(0, 0, 0, 0));
+        advancedToggle.addActionListener(e -> setAdvancedOpen(!advancedOpen));
+        form.add(leftAligned(advancedToggle, LABEL_WIDTH + 8));
 
-        JLabel privacy = new JLabel("<html><b>Privacy:</b> Remote providers receive prompts and selected Burp traffic. "
-                + "The API token is stored in Burp preferences.</html>");
-        c.gridx = 0;
-        c.gridy = row++;
-        c.gridwidth = 2;
-        form.add(privacy, c);
-        c.gridwidth = 1;
+        advancedPanel.setLayout(new BoxLayout(advancedPanel, BoxLayout.Y_AXIS));
+        advancedPanel.setOpaque(false);
+        advancedPanel.setAlignmentX(LEFT_ALIGNMENT);
+        advancedPanel.add(labeledRow("Chat endpoint:", chatEndpoint));
+        advancedPanel.add(labeledRow("Models endpoint:", modelsEndpoint));
+        advancedPanel.setVisible(false);
+        form.add(advancedPanel);
+
+        form.add(labeledRow("Model:", model));
+        form.add(labeledRow("API token (optional):", apiToken));
+        form.add(labeledRow("Temperature:", temperature));
+        form.add(labeledRow("Max tokens:", maxTokens));
+        form.add(labeledRow("Max steps:", maxSteps));
+        form.add(labeledRow("Timeout (s):", timeout));
+        form.add(labeledRow("Context budget (chars):", contextBudget));
+        form.add(labeledRow("Default mode:", defaultMode));
+        form.add(leftAligned(enforceScope, LABEL_WIDTH + 8));
+        form.add(leftAligned(passiveAiScan, LABEL_WIDTH + 8));
+
+        JTextArea privacy = new JTextArea(
+                "Privacy: Remote providers receive prompts and selected Burp traffic. "
+                        + "The API token is stored in Burp preferences.");
+        privacy.setEditable(false);
+        privacy.setOpaque(false);
+        privacy.setLineWrap(true);
+        privacy.setWrapStyleWord(true);
+        privacy.setBorder(Theme.pad(8, 4, 8, 4));
+        privacy.setFocusable(false);
+        privacy.setForeground(Theme.mutedText());
+        privacy.setFont(Theme.baseFont());
+        privacy.setAlignmentX(LEFT_ALIGNMENT);
+        privacy.setMaximumSize(new Dimension(Integer.MAX_VALUE, 64));
+        form.add(privacy);
 
         JButton test = new JButton("Test connection");
         JButton save = new JButton("Save");
-        JPanel buttons = new JPanel();
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 4));
+        buttons.setOpaque(false);
+        buttons.setAlignmentX(LEFT_ALIGNMENT);
         buttons.add(test);
         buttons.add(save);
-        c.gridx = 1;
-        c.gridy = row++;
-        form.add(buttons, c);
+        form.add(buttons);
 
-        c.gridx = 0;
-        c.gridy = row;
-        c.gridwidth = 2;
-        form.add(status, c);
+        status.setAlignmentX(LEFT_ALIGNMENT);
+        form.add(Box.createVerticalStrut(4));
+        form.add(status);
 
         add(form, BorderLayout.NORTH);
 
@@ -197,7 +226,15 @@ public class ConfigPanel extends JPanel {
             modelsEndpoint.setText(Config.defaultModelsEndpoint(selected.id));
         }
         previousProvider = selected.id;
-        status.setText("Using " + selected.label + ". Configure endpoints, model, and token, then test.");
+        status.setText("Using " + selected.label + ". Configure the base URL, model, and token, then test.");
+    }
+
+    private void setAdvancedOpen(boolean open) {
+        advancedOpen = open;
+        advancedPanel.setVisible(open);
+        advancedToggle.setText(open ? "Hide advanced" : "Advanced");
+        form.revalidate();
+        form.repaint();
     }
 
     private void selectProvider(String id) {
@@ -237,13 +274,34 @@ public class ConfigPanel extends JPanel {
         }, "cybernexis-conn-test").start();
     }
 
-    private static void addRow(JPanel form, GridBagConstraints c, int row, String label, java.awt.Component field) {
-        c.gridx = 0;
-        c.gridy = row;
-        c.gridwidth = 1;
-        form.add(new JLabel(label), c);
+    private static JPanel labeledRow(String label, Component field) {
+        JPanel row = new JPanel(new GridBagLayout());
+        row.setOpaque(false);
+        row.setAlignmentX(LEFT_ALIGNMENT);
+        GridBagConstraints c = new GridBagConstraints();
+        c.insets = new Insets(4, 4, 4, 4);
+        c.anchor = GridBagConstraints.WEST;
+        JLabel caption = new JLabel(label);
+        caption.setPreferredSize(new Dimension(LABEL_WIDTH, caption.getPreferredSize().height));
+        row.add(caption, c);
         c.gridx = 1;
-        form.add(field, c);
+        c.fill = GridBagConstraints.HORIZONTAL;
+        c.weightx = 1;
+        row.add(field, c);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, row.getPreferredSize().height + 4));
+        return row;
+    }
+
+    private static JPanel leftAligned(Component child, int leftPad) {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
+        row.setOpaque(false);
+        row.setAlignmentX(LEFT_ALIGNMENT);
+        if (leftPad > 0) {
+            row.add(Box.createHorizontalStrut(leftPad));
+        }
+        row.add(child);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, row.getPreferredSize().height + 4));
+        return row;
     }
 
     private static int parseInt(String s, int def) {

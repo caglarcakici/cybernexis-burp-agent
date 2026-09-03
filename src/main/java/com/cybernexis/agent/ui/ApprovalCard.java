@@ -23,6 +23,7 @@ import javax.swing.JPanel;
 import javax.swing.KeyStroke;
 
 import com.cybernexis.agent.json.Json;
+import com.cybernexis.agent.tools.ToolNames;
 
 public class ApprovalCard extends RoundedPanel {
 
@@ -41,13 +42,14 @@ public class ApprovalCard extends RoundedPanel {
         setLine(Theme.blend(Theme.border(), Theme.accent(), 0.35));
         setBorder(Theme.pad(12, 14, 12, 14));
         setAlignmentX(LEFT_ALIGNMENT);
+        String label = ToolNames.displayName(toolLabel);
 
         JPanel head = new JPanel();
         head.setOpaque(false);
         head.setLayout(new BoxLayout(head, BoxLayout.Y_AXIS));
 
         if (escalated) {
-            Chip badge = new Chip("Escalated by Smart mode \u00b7 " + toolLabel,
+            Chip badge = new Chip("Escalated by Smart mode \u00b7 " + label,
                     Theme.warning(), Theme.blend(Theme.surface(), Theme.warning(), 0.16))
                     .withDot(Theme.warning());
             badge.setAlignmentX(LEFT_ALIGNMENT);
@@ -56,7 +58,7 @@ public class ApprovalCard extends RoundedPanel {
             head.add(Box.createVerticalStrut(6));
         }
 
-        JLabel title = new JLabel(com.cybernexis.agent.Branding.allowAction(toolLabel));
+        JLabel title = new JLabel(com.cybernexis.agent.Branding.allowAction(label));
         title.setFont(Theme.bold(13f));
         title.setForeground(Theme.text());
         title.setAlignmentX(LEFT_ALIGNMENT);

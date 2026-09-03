@@ -18,6 +18,7 @@ import javax.swing.JTextArea;
 import com.cybernexis.agent.json.Json;
 import com.cybernexis.agent.tools.MessageStore;
 import com.cybernexis.agent.tools.ToolContext;
+import com.cybernexis.agent.tools.ToolNames;
 import com.cybernexis.agent.tools.ToolResult;
 
 public class ToolCallCard extends JPanel {
@@ -42,7 +43,7 @@ public class ToolCallCard extends JPanel {
         JLabel used = new JLabel("used");
         used.setForeground(Theme.mutedText());
         used.setFont(Theme.plain(12f));
-        Chip toolChip = new Chip(tool, Theme.accent(),
+        Chip toolChip = new Chip(ToolNames.displayName(tool), Theme.accent(),
                 Theme.blend(Theme.surface(), Theme.accent(), 0.16));
         title.add(used);
         title.add(Box.createHorizontalStrut(8));
