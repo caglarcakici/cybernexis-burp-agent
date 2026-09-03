@@ -1,5 +1,5 @@
 /*
- * The agent loop: builds the prompt, streams a turn from Ollama, parses the
+ * The agent loop: builds the prompt, streams a turn from the selected model, parses the
  * response, executes the chosen tool against Burp, feeds the result back, and
  * repeats until a final answer or the step limit is reached.
  */
@@ -115,7 +115,7 @@ public class AgentLoop {
     }
 
     private void runSteps(Listener listener, OllamaClient.CancelToken cancel) {
-        List<Map<String, Object>> tools = config.useOpenAiEndpoint ? openAiTools() : null;
+        List<Map<String, Object>> tools = config.usesNativeTools() ? openAiTools() : null;
 
         for (int step = 1; step <= config.maxSteps; step++) {
             if (cancel.isCancelled()) {
@@ -143,14 +143,15 @@ public class AgentLoop {
                     listener.onStatus("Stopped.");
                     return;
                 }
-                listener.onError("Ollama request failed: " + e.getMessage());
+                listener.onError(config.providerDisplayName() + " request failed: " + e.getMessage());
                 return;
             }
 
             if (result.timedOut && (result.content == null || result.content.trim().isEmpty())) {
-                listener.onError("Ollama stopped responding: no tokens for " + config.timeoutSeconds
-                        + "s (idle timeout). The server may be overloaded, still loading the model,"
-                        + " or unreachable. Check the Ollama logs, or raise timeout_seconds in settings.");
+                listener.onError(config.providerDisplayName() + " stopped responding: no tokens for "
+                        + config.timeoutSeconds + "s (idle timeout). The provider may be overloaded,"
+                        + " still loading the model, or unreachable. Check the provider logs, or raise"
+                        + " timeout_seconds in settings.");
                 return;
             }
 

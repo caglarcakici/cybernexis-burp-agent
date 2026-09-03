@@ -1,7 +1,7 @@
 /*
- * HTTP client for a local Ollama server. Supports streaming chat over the
- * native /api/chat endpoint and the OpenAI-compatible /v1/chat/completions
- * endpoint (with native tool calling). Uses only the JDK HttpClient.
+ * Provider-neutral model HTTP client. Supports Ollama native chat,
+ * OpenAI-compatible Chat Completions, and Anthropic Messages with streaming
+ * tool calls. Uses only the JDK HttpClient.
  */
 package com.cybernexis.agent.ollama;
 
@@ -95,10 +95,17 @@ public class OllamaClient {
                 .build();
     }
 
-    /** GET {base}/api/version — quick connectivity check. Returns version or throws. */
+    /** Quick provider-specific connectivity check. */
+    public String connectionSummary() throws IOException, InterruptedException {
+        if (Config.PROVIDER_OLLAMA.equals(config.normalizedProvider())) {
+            return "Ollama v" + version();
+        }
+        return config.providerDisplayName();
+    }
+
+    /** GET {base}/api/version — Ollama connectivity check. */
     public String version() throws IOException, InterruptedException {
-        HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create(config.normalizedBaseUrl() + "/api/version"))
+        HttpRequest req = requestBuilder("/api/version")
                 .timeout(Duration.ofSeconds(10))
                 .GET()
                 .build();
@@ -110,18 +117,23 @@ public class OllamaClient {
         return v == null ? resp.body() : String.valueOf(v);
     }
 
-    /** GET {base}/api/tags — list installed model names. */
+    /** List models using the selected provider's discovery endpoint. */
     public List<String> listModels() throws IOException, InterruptedException {
-        HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create(config.normalizedBaseUrl() + "/api/tags"))
+        boolean ollama = Config.PROVIDER_OLLAMA.equals(config.normalizedProvider());
+        String endpoint = config.resolvedModelsEndpoint();
+        HttpRequest req = requestBuilder(endpoint)
                 .timeout(Duration.ofSeconds(10))
                 .GET()
                 .build();
         HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
+        if (resp.statusCode() / 100 != 2) {
+            throw new IOException("HTTP " + resp.statusCode() + " from " + endpoint + ": " + resp.body());
+        }
         List<String> names = new ArrayList<>();
         Map<String, Object> body = Json.asMap(Json.parse(resp.body()));
-        for (Object m : Json.asList(body.get("models"))) {
-            Object name = Json.asMap(m).get("name");
+        for (Object m : Json.asList(body.get(ollama ? "models" : "data"))) {
+            Map<String, Object> model = Json.asMap(m);
+            Object name = model.get(ollama ? "name" : "id");
             if (name != null) {
                 names.add(String.valueOf(name));
             }
@@ -131,16 +143,20 @@ public class OllamaClient {
 
     /**
      * Stream a chat turn. {@code tools} may be null/empty. Returns the aggregated
-     * assistant content plus any native tool calls (only when using the OpenAI endpoint).
+     * assistant content plus any native tool calls.
      */
     public ChatResult streamChat(List<Map<String, Object>> messages,
                                  List<Map<String, Object>> tools,
                                  TokenListener listener,
                                  CancelToken cancel) throws IOException, InterruptedException {
-        if (config.useOpenAiEndpoint) {
-            return streamOpenAi(messages, tools, listener, cancel);
+        switch (config.normalizedProvider()) {
+            case Config.PROVIDER_OPENAI:
+                return streamOpenAi(messages, tools, listener, cancel);
+            case Config.PROVIDER_ANTHROPIC:
+                return streamAnthropic(messages, tools, listener, cancel);
+            default:
+                return streamNative(messages, listener, cancel);
         }
-        return streamNative(messages, listener, cancel);
     }
 
     // ---- Native Ollama /api/chat -------------------------------------------
@@ -157,7 +173,7 @@ public class OllamaClient {
         body.put("options", options);
         body.put("messages", messages);
 
-        HttpResponse<InputStream> resp = post("/api/chat", Json.write(body), cancel);
+        HttpResponse<InputStream> resp = post(config.resolvedChatEndpoint(), Json.write(body), cancel);
         StringBuilder content = new StringBuilder();
         InputStream in = resp.body();
         IdleGuard guard = new IdleGuard(in, config.timeoutSeconds, cancel);
@@ -175,7 +191,7 @@ public class OllamaClient {
                 }
                 Map<String, Object> obj = Json.parseObject(line);
                 if (obj.containsKey("error")) {
-                    throw new IOException("Ollama error: " + obj.get("error"));
+                    throw providerError(obj.get("error"));
                 }
                 Object message = obj.get("message");
                 if (message instanceof Map) {
@@ -224,7 +240,7 @@ public class OllamaClient {
             body.put("tool_choice", "auto");
         }
 
-        HttpResponse<InputStream> resp = post("/v1/chat/completions", Json.write(body), cancel);
+        HttpResponse<InputStream> resp = post(config.resolvedChatEndpoint(), Json.write(body), cancel);
         StringBuilder content = new StringBuilder();
         // tool call fragments accumulated by index
         TreeMap<Integer, StringBuilder> toolArgs = new TreeMap<>();
@@ -250,7 +266,7 @@ public class OllamaClient {
                 }
                 Map<String, Object> obj = Json.parseObject(data);
                 if (obj.containsKey("error")) {
-                    throw new IOException("Ollama error: " + obj.get("error"));
+                    throw providerError(obj.get("error"));
                 }
                 List<Object> choices = Json.asList(obj.get("choices"));
                 if (choices.isEmpty()) {
@@ -296,6 +312,138 @@ public class OllamaClient {
         return new ChatResult(content.toString(), calls, guard.timedOut());
     }
 
+    // ---- Anthropic Messages /v1/messages ----------------------------------
+
+    private ChatResult streamAnthropic(List<Map<String, Object>> messages,
+                                       List<Map<String, Object>> tools,
+                                       TokenListener listener,
+                                       CancelToken cancel) throws IOException, InterruptedException {
+        Map<String, Object> body = anthropicBody(messages, tools);
+        HttpResponse<InputStream> resp = post(config.resolvedChatEndpoint(), Json.write(body), cancel);
+
+        StringBuilder content = new StringBuilder();
+        TreeMap<Integer, StringBuilder> toolArgs = new TreeMap<>();
+        TreeMap<Integer, String> toolNames = new TreeMap<>();
+
+        InputStream in = resp.body();
+        IdleGuard guard = new IdleGuard(in, config.timeoutSeconds, cancel);
+        guard.start();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                guard.activity();
+                if (cancel != null && cancel.isCancelled()) {
+                    break;
+                }
+                line = line.trim();
+                if (line.isEmpty() || !line.startsWith("data:")) {
+                    continue;
+                }
+                String data = line.substring("data:".length()).trim();
+                if (data.isEmpty() || data.equals("[DONE]")) {
+                    continue;
+                }
+                Map<String, Object> obj = Json.parseObject(data);
+                if (obj.containsKey("error") || "error".equals(obj.get("type"))) {
+                    throw providerError(obj.get("error"));
+                }
+                String type = Json.asString(obj.get("type"), "");
+                int idx = Json.asInt(obj.getOrDefault("index", 0), 0);
+                if ("content_block_start".equals(type)) {
+                    Map<String, Object> block = Json.asMap(obj.get("content_block"));
+                    String blockType = Json.asString(block.get("type"), "");
+                    if ("text".equals(blockType)) {
+                        emit(Json.asString(block.get("text"), ""), content, listener);
+                    } else if ("tool_use".equals(blockType)) {
+                        toolNames.put(idx, Json.asString(block.get("name"), ""));
+                        Map<String, Object> initial = Json.asMap(block.get("input"));
+                        if (!initial.isEmpty()) {
+                            toolArgs.computeIfAbsent(idx, k -> new StringBuilder()).append(Json.write(initial));
+                        }
+                    }
+                } else if ("content_block_delta".equals(type)) {
+                    Map<String, Object> delta = Json.asMap(obj.get("delta"));
+                    String deltaType = Json.asString(delta.get("type"), "");
+                    if ("text_delta".equals(deltaType)) {
+                        emit(Json.asString(delta.get("text"), ""), content, listener);
+                    } else if ("input_json_delta".equals(deltaType)) {
+                        toolArgs.computeIfAbsent(idx, k -> new StringBuilder())
+                                .append(Json.asString(delta.get("partial_json"), ""));
+                    }
+                } else if ("message_stop".equals(type)) {
+                    break;
+                }
+            }
+        } catch (IOException e) {
+            if ((cancel == null || !cancel.isCancelled()) && !guard.timedOut()) {
+                throw e;
+            }
+        } finally {
+            guard.stop();
+        }
+
+        List<ToolCallRaw> calls = new ArrayList<>();
+        for (Map.Entry<Integer, String> e : toolNames.entrySet()) {
+            if (e.getValue() == null || e.getValue().isEmpty()) {
+                continue;
+            }
+            StringBuilder a = toolArgs.get(e.getKey());
+            calls.add(new ToolCallRaw(e.getValue(), a == null || a.length() == 0 ? "{}" : a.toString()));
+        }
+        return new ChatResult(content.toString(), calls, guard.timedOut());
+    }
+
+    private Map<String, Object> anthropicBody(List<Map<String, Object>> messages,
+                                              List<Map<String, Object>> tools) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", config.model);
+        body.put("stream", true);
+        body.put("temperature", config.temperature);
+        body.put("max_tokens", config.maxTokens);
+
+        StringBuilder system = new StringBuilder();
+        List<Map<String, Object>> convertedMessages = new ArrayList<>();
+        for (Map<String, Object> message : messages) {
+            String role = Json.asString(message.get("role"), "user");
+            String text = Json.asString(message.get("content"), "");
+            if ("system".equals(role)) {
+                if (system.length() > 0) {
+                    system.append('\n');
+                }
+                system.append(text);
+            } else {
+                Map<String, Object> converted = new LinkedHashMap<>();
+                converted.put("role", "assistant".equals(role) ? "assistant" : "user");
+                converted.put("content", text);
+                convertedMessages.add(converted);
+            }
+        }
+        if (system.length() > 0) {
+            body.put("system", system.toString());
+        }
+        body.put("messages", convertedMessages);
+
+        if (tools != null && !tools.isEmpty()) {
+            List<Map<String, Object>> anthropicTools = new ArrayList<>();
+            for (Map<String, Object> tool : tools) {
+                Map<String, Object> fn = Json.asMap(tool.get("function"));
+                if (fn.isEmpty()) {
+                    continue;
+                }
+                Map<String, Object> converted = new LinkedHashMap<>();
+                converted.put("name", fn.get("name"));
+                converted.put("description", fn.get("description"));
+                converted.put("input_schema", fn.get("parameters"));
+                anthropicTools.add(converted);
+            }
+            body.put("tools", anthropicTools);
+            Map<String, Object> choice = new LinkedHashMap<>();
+            choice.put("type", "auto");
+            body.put("tool_choice", choice);
+        }
+        return body;
+    }
+
     // ---- Low-level helpers --------------------------------------------------
 
     private HttpResponse<InputStream> post(String path, String jsonBody, CancelToken cancel)
@@ -304,8 +452,7 @@ public class OllamaClient {
         // for minutes on large models. An IdleGuard aborts only when the server
         // stops producing tokens for config.timeoutSeconds; slow-but-alive
         // generations are never cut off mid-answer.
-        HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create(config.normalizedBaseUrl() + path))
+        HttpRequest req = requestBuilder(path)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8))
                 .build();
@@ -318,6 +465,44 @@ public class OllamaClient {
             throw new IOException("HTTP " + resp.statusCode() + " from " + path + ": " + err);
         }
         return resp;
+    }
+
+    private HttpRequest.Builder requestBuilder(String path) {
+        HttpRequest.Builder builder = HttpRequest.newBuilder()
+                .uri(URI.create(config.resolveEndpoint(path, path)));
+        String token = config.apiToken == null ? "" : config.apiToken.trim();
+        if (!token.isEmpty()) {
+            if (Config.PROVIDER_ANTHROPIC.equals(config.normalizedProvider())) {
+                builder.header("x-api-key", token);
+            } else {
+                builder.header("Authorization", "Bearer " + token);
+            }
+        }
+        if (Config.PROVIDER_ANTHROPIC.equals(config.normalizedProvider())) {
+            builder.header("anthropic-version", "2023-06-01");
+        }
+        return builder;
+    }
+
+    private IOException providerError(Object error) {
+        if (error instanceof Map) {
+            Map<String, Object> e = Json.asMap(error);
+            Object message = e.get("message");
+            if (message != null) {
+                return new IOException(config.providerDisplayName() + " error: " + message);
+            }
+        }
+        return new IOException(config.providerDisplayName() + " error: " + String.valueOf(error));
+    }
+
+    private static void emit(String token, StringBuilder content, TokenListener listener) {
+        if (token == null || token.isEmpty()) {
+            return;
+        }
+        content.append(token);
+        if (listener != null) {
+            listener.onToken(token);
+        }
     }
 
     /**

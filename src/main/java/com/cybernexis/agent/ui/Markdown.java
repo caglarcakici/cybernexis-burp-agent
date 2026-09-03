@@ -25,7 +25,7 @@ public final class Markdown {
         options.set(Parser.EXTENSIONS, Arrays.asList(
                 TablesExtension.create(),
                 StrikethroughExtension.create()));
-        // Render local model output as text only; never inject raw HTML into the pane.
+        // Render model output as text only; never inject raw HTML into the pane.
         options.set(HtmlRenderer.ESCAPE_HTML, true);
         options.set(HtmlRenderer.SOFT_BREAK, "<br/>\n");
         PARSER = Parser.builder(options).build();

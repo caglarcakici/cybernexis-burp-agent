@@ -1,15 +1,15 @@
 # Cybernexis Burp Suite Pro Agent
 
-**Agentic security testing inside [Burp Suite](https://portswigger.net/burp), driven by a model you run locally with [Ollama](https://ollama.com).**
+**Agentic security testing inside [Burp Suite](https://portswigger.net/burp), driven by local Ollama, OpenAI-compatible, or Anthropic models.**
 
 [![Java](https://img.shields.io/badge/Java-11+-ED8B00?logo=openjdk&logoColor=white)](#requirements)
 [![Burp Suite](https://img.shields.io/badge/Burp_Suite-Professional-FF6633)](#requirements)
-[![Ollama](https://img.shields.io/badge/LLM-Ollama-000000)](#requirements)
+[![Providers](https://img.shields.io/badge/LLM-Ollama%20%7C%20OpenAI%20%7C%20Anthropic-000000)](#model-providers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Cybernexis Agent is a Burp extension: chat with an LLM that can inspect scope, sitemap, and issues, send requests, fuzz, spray credentials, and write findings back into Burp. Traffic and prompts stay on your machine.
+Cybernexis Agent is a Burp extension: chat with an LLM that can inspect scope, sitemap, and issues, send requests, fuzz, spray credentials, and write findings back into Burp. With local Ollama, prompts stay on your machine. Remote providers receive the prompts and selected Burp traffic needed for the task.
 
-It is **not** an LLM. You bring the model (any tool-capable with Ollama). It is **not** affiliated with PortSwigger.
+It is **not** an LLM. You bring a tool-capable model through Ollama, an OpenAI-compatible endpoint, or Anthropic. It is **not** affiliated with PortSwigger.
 
 ```mermaid
 flowchart TD
@@ -25,7 +25,7 @@ flowchart TD
         TOOLS --> LOOP
     end
 
-    O[Local Ollama Model]
+    O[Selected Model Provider]
     B[Burp Suite Professional]
 
     U --> UI
@@ -55,7 +55,8 @@ flowchart TD
 - **Target memory** — durable per-host notes and a token map (JWT, UUID, CSRF, session cookies) across tasks
 - **Live fuzzing** — status, length, reflection, error signatures, timing anomalies (blind SSRF / command injection)
 - **Password spray** — built-in wordlists and `{{pass}}` / `{{user}}` markers; no huge lists pasted into the model
-- **Optional passive scanner** — off by default; in-scope traffic → local model → native Burp issues (`Cybernexis:`)
+- **Model providers** — Ollama native, OpenAI-compatible Chat Completions, or Anthropic Messages; local or remote base URL
+- **Optional passive scanner** — off by default; in-scope traffic → selected model → native Burp issues (`Cybernexis:`)
 - **Right-click** — *Send to Cybernexis* from Proxy, Repeater, Target, or Scanner
 - **Safety** — out-of-scope action tools can be blocked; conversation context is budgeted so long runs stay stable
 
@@ -66,8 +67,8 @@ flowchart TD
 | JDK | 11+ (Burp must run on a JDK if you use `run_custom_script`) |
 | Maven | 3.8+ |
 | Burp | Professional 2024.x+ (built against Montoya API `2025.12`) |
-| Ollama | running at `http://127.0.0.1:11434` |
-| Model | tool-capable, e.g. `orcarouter/Qwen3.8-27B-Uncensored:latest` |
+| Provider | Ollama, an OpenAI-compatible Chat Completions endpoint, or Anthropic |
+| Model | tool-capable; for example a local Ollama model, an OpenAI API model, or a Claude model |
 
 ## Install
 
@@ -79,7 +80,7 @@ mvn -q package -DskipTests
 
 1. Burp → **Extensions → Add** → type **Java** → select `target/cybernexis-agent.jar`
 2. Open the **Cybernexis** suite tab
-3. **Settings** — set Ollama base URL and model, **Test connection**, **Save**
+3. **Settings** — choose a provider protocol, set base URL, chat/models endpoints, model, and optional API token, then **Test connection** and **Save**
 
 Unload any older build of the extension first so you do not get two suite tabs.
 
@@ -103,6 +104,20 @@ Right-click any HTTP message → **Send to Cybernexis** to start a task with tha
 
 Enable **Block action tools targeting out-of-scope hosts** in Settings unless you intend otherwise.
 
+## Model providers
+
+| Protocol | Default base URL | Authentication | Endpoint |
+|---|---|---|---|
+| **Ollama native** | `http://127.0.0.1:11434` | None; optional Bearer token for a protected gateway | `/api/chat` |
+| **OpenAI-compatible** | `https://api.openai.com` | Bearer token | `/v1/chat/completions` |
+| **Anthropic Messages** | `https://api.anthropic.com` | `x-api-key` token | `/v1/messages` |
+
+Custom base URLs are supported, including gateways and self-hosted OpenAI-compatible servers. Chat and model-list endpoints are configured independently and accept either a relative path or a complete URL. A base URL may include the trailing `/v1`; Cybernexis avoids adding it twice.
+
+For example, DeepSeek's OpenAI-compatible API uses base URL `https://api.deepseek.com`, chat endpoint `/chat/completions`, and models endpoint `/models`. Its Anthropic-compatible API can instead use protocol **Anthropic Messages**, base URL `https://api.deepseek.com/anthropic`, and chat endpoint `/v1/messages`.
+
+API tokens are masked in the Settings UI and stored in Burp's extension preferences. Treat the Burp user profile as sensitive. Remote providers receive model prompts, tool results, and any Burp traffic included in those prompts. Review your provider's data policy before using remote models with confidential targets.
+
 ## Tools (overview)
 
 The model only calls names from the live catalog. Highlights:
@@ -121,11 +136,10 @@ The model only calls names from the live catalog. Highlights:
 
 Persisted in Burp preferences (survives reload):
 
-- Ollama URL, model, temperature, max tokens / steps / timeout
+- Provider protocol, base URL, chat/models endpoints, model, API token, temperature, max tokens / steps / timeout
 - Context budget (characters kept per turn)
 - Default approval mode
 - Scope enforcement
-- OpenAI-compatible `/v1` endpoint (optional)
 - Passive scanner (default **off**)
 
 ## Build from source
