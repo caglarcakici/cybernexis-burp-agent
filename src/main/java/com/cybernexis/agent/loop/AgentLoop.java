@@ -116,16 +116,18 @@ public class AgentLoop {
 
     private void runSteps(Listener listener, OllamaClient.CancelToken cancel) {
         List<Map<String, Object>> tools = config.usesNativeTools() ? openAiTools() : null;
+        int maxSteps = config.maxSteps > 0 ? config.maxSteps : 8;
+        FailStreak streak = new FailStreak();
 
-        for (int step = 1; step <= config.maxSteps; step++) {
+        for (int step = 1; step <= maxSteps; step++) {
             if (cancel.isCancelled()) {
                 listener.onStatus("Stopped.");
                 return;
             }
-            listener.onStatus("Thinking (step " + step + "/" + config.maxSteps + ")...");
+            listener.onStatus("Thinking (step " + step + "/" + maxSteps + ")...");
 
             toolContext.messages.refresh(toolContext.api);
-            String system = promptBuilder.buildSystemMessage(toolContext, config.maxSteps);
+            String system = promptBuilder.buildSystemMessage(toolContext, maxSteps);
             if (systemAddendum != null && !systemAddendum.trim().isEmpty()) {
                 system = system + "\nTASK INSTRUCTIONS (follow these for this session)\n"
                         + systemAddendum.trim() + "\n";
@@ -183,8 +185,9 @@ public class AgentLoop {
                         + (suggestion != null ? " Did you mean '" + suggestion + "'?" : "")
                         + " Use only the exact names from the catalog.";
                 ToolResult tr = ToolResult.error(err);
-                listener.onToolResult(call.tool, tr);
-                conversation.add(message("user", toolResultMessage(call.tool, tr)));
+                if (emitToolResult(listener, call.tool, call.args, tr, streak)) {
+                    return;
+                }
                 continue;
             }
 
@@ -192,8 +195,9 @@ public class AgentLoop {
                 String block = ScopeGuard.check(descriptor.name, call.args, toolContext.api);
                 if (block != null) {
                     ToolResult tr = ToolResult.error(block);
-                    listener.onToolResult(descriptor.name, tr);
-                    conversation.add(message("user", toolResultMessage(descriptor.name, tr)));
+                    if (emitToolResult(listener, descriptor.name, call.args, tr, streak)) {
+                        return;
+                    }
                     continue;
                 }
             }
@@ -203,8 +207,8 @@ public class AgentLoop {
                 boolean allowed = listener.confirmAction(descriptor, call.args);
                 if (!allowed) {
                     ToolResult tr = ToolResult.error("User declined to run action tool '" + descriptor.name + "'.");
-                    listener.onToolResult(descriptor.name, tr);
-                    conversation.add(message("user", toolResultMessage(descriptor.name, tr)));
+                    emitToolResult(listener, descriptor.name, call.args, tr, streak);
+                    streak.reset();
                     continue;
                 }
             }
@@ -222,14 +226,56 @@ public class AgentLoop {
                 toolResult = ToolResult.error(descriptor.name + " threw: " + e.getClass().getSimpleName()
                         + ": " + e.getMessage());
             }
-            listener.onToolResult(descriptor.name, toolResult);
             logToolResult(listener, step, descriptor.name, call.args, toolResult);
-            conversation.add(message("user", toolResultMessage(descriptor.name, toolResult)));
+            if (emitToolResult(listener, descriptor.name, call.args, toolResult, streak)) {
+                return;
+            }
         }
 
-        listener.onStatus("Reached max steps (" + config.maxSteps + ").");
-        listener.onFinalAnswer("_Reached the maximum of " + config.maxSteps
+        listener.onStatus("Reached max steps (" + maxSteps + ").");
+        listener.onFinalAnswer("_Reached the maximum of " + maxSteps
                 + " tool calls without a final answer. Ask a narrower question or raise max_steps in settings._");
+    }
+
+    /** Posts a tool result. Returns true if the loop should stop (same error 3 times). */
+    private boolean emitToolResult(Listener listener, String tool, Map<String, Object> args,
+                                   ToolResult result, FailStreak streak) {
+        listener.onToolResult(tool, result);
+        conversation.add(message("user", toolResultMessage(tool, result)));
+        if (streak.note(tool, args, result)) {
+            listener.onStatus("Stopped: " + tool + " failed the same way 3 times.");
+            listener.onFinalAnswer("_Stopped after `" + tool + "` failed the same way 3 times"
+                    + (result.error != null ? " (`" + result.error + "`)" : "")
+                    + ". Start a new task or change the approach._");
+            return true;
+        }
+        return false;
+    }
+
+    private static final class FailStreak {
+        private String key;
+        private int count;
+
+        boolean note(String tool, Map<String, Object> args, ToolResult result) {
+            if (result == null || result.ok) {
+                reset();
+                return false;
+            }
+            String next = tool + "|" + Json.write(args == null ? Map.of() : args) + "|"
+                    + String.valueOf(result.error);
+            if (next.equals(key)) {
+                count++;
+            } else {
+                key = next;
+                count = 1;
+            }
+            return count >= 3;
+        }
+
+        void reset() {
+            key = null;
+            count = 0;
+        }
     }
 
     private List<Map<String, Object>> openAiTools() {
