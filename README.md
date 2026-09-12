@@ -7,7 +7,9 @@
 [![Providers](https://img.shields.io/badge/LLM-Ollama%20%7C%20OpenAI%20%7C%20Anthropic-000000)](#model-providers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Cybernexis Agent is a Burp extension: chat with an LLM that can inspect scope, sitemap, and issues, send requests, fuzz, spray credentials, and write findings back into Burp. With local Ollama, prompts stay on your machine. Remote providers receive the prompts and selected Burp traffic needed for the task.
+Cybernexis Agent is a Burp extension: chat with an LLM that can inspect scope, sitemap, and issues, send requests, fuzz, spray credentials, and write findings back into Burp. **Playbooks** steer a task toward one vuln class (IDOR, JWT, SSRF, GraphQL, …). A blank task can also pick a playbook from live Burp state — sitemap, scanner issues, HTTP, and the token map — when you ask to test or use *Send to Cybernexis*.
+
+With local Ollama, prompts stay on your machine. Remote providers receive the prompts and selected Burp traffic needed for the task.
 
 It is **not** an LLM. You bring a tool-capable model through Ollama, an OpenAI-compatible endpoint, or Anthropic. It is **not** affiliated with PortSwigger.
 
@@ -17,10 +19,12 @@ flowchart TD
 
     subgraph C[Cybernexis Burp Agent]
         UI[Chat and Task Sessions]
+        PB[Playbook / surface hints]
         LOOP[Agent Loop]
         TOOLS[Security Tools]
 
-        UI --> LOOP
+        UI --> PB
+        PB --> LOOP
         LOOP --> TOOLS
         TOOLS --> LOOP
     end
@@ -29,6 +33,7 @@ flowchart TD
     B[Burp Suite Professional]
 
     U --> UI
+    B -->|Sitemap, issues, HTTP, tokens| PB
     LOOP <-->|Prompts and tool calls| O
     TOOLS <-->|Montoya API| B
     B -->|Traffic and findings| LOOP
@@ -49,6 +54,8 @@ flowchart TD
 ## Features
 
 - **Multi-task chat** — independent sessions with live request / tool-call counts, markdown answers, and native Burp request/response editors on tool cards
+- **Playbooks** — vuln-class checklists mapped to Cybernexis tools (not payload packs). Pick one from `+` → **Playbooks**, or let a blank task attach one from your message or Burp state
+- **Surface hints** — sitemap paths, issue names, HTTP bodies/headers, and the token map are scored (GraphQL, JWT, SQLi, SSRF, IDOR, …). The strongest class is loaded; others stay visible to the model
 - **Approvals** — Manual, Smart (high-impact tools escalate), or Auto
 - **Host focus** — naming a URL locks that task to that host (`www.` included; sibling subdomains stay out)
 - **Variables** — `extract_from_response` → `{{csrf}}` in later `send_request` / `fuzz_request` / `brute_force`
@@ -80,7 +87,7 @@ mvn -q package -DskipTests
 
 1. Burp → **Extensions → Add** → type **Java** → select `target/cybernexis-agent.jar`
 2. Open the **Cybernexis** suite tab
-3. **Settings** — choose a provider protocol, set base URL, chat/models endpoints, model, and optional API token, then **Test connection** and **Save**
+3. **Settings** — choose a provider protocol, set base URL, model, and optional API token, then **Test connection** and **Save**. Custom chat/model-list paths are under **Advanced**.
 
 Unload any older build of the extension first so you do not get two suite tabs.
 
@@ -91,10 +98,12 @@ Ask in **Chat**, for example:
 - *What's in scope?*
 - *List the sitemap for this host*
 - *Inspect issue 3*
+- *https://target.example/ test this host*
+- *Test JWT on the login API*
 - *Send request 42 to Repeater*
 - *Extract the CSRF token from message 10 and brute-force the login*
 
-Right-click any HTTP message → **Send to Cybernexis** to start a task with that exchange loaded.
+Right-click any HTTP message → **Send to Cybernexis** to start a task with that exchange loaded. If the URL, body, or headers look like GraphQL, JWT, SSRF, and so on, the matching playbook is attached automatically.
 
 | Mode | Behaviour |
 |---|---|
@@ -104,6 +113,54 @@ Right-click any HTTP message → **Send to Cybernexis** to start a task with tha
 
 Enable **Block action tools targeting out-of-scope hosts** in Settings unless you intend otherwise.
 
+### New task (`+`)
+
+| Group | What it does |
+|---|---|
+| **Blank** | No extra instructions. A playbook can still attach from your first test prompt or from Burp state. |
+| **Engagement** | Broad roles: Web App, API, Recon (read-only), Triage existing findings. |
+| **Playbooks** | One vuln-class checklist (table below). Pins that playbook for the task. |
+
+A chip in the transcript shows `Template · …` or `Playbook · JWT · from your message` / `from sitemap …`.
+
+## Playbooks
+
+Each playbook is a short methodology: test order, which Cybernexis tools to call, and a `## Finding / ## Evidence / ## Recommendation` write-up. They do not embed exploit payload catalogs or third-party scanners (no sqlmap, jwt_tool, …).
+
+| Playbook | Use when |
+|---|---|
+| **Fast checking** | First-pass triage; no new attacks unless you ask |
+| **IDOR / BOLA** | Object IDs in URLs, bodies, or nested API resources |
+| **API security** | REST/JSON: BOLA, BFLA, mass assignment, verb tampering |
+| **JWT** | Bearer/JWT in headers, cookies, or the token map |
+| **OAuth / OIDC** | `/authorize`, `redirect_uri`, `state`, `code` |
+| **SSRF** | Webhook/`url=` style parameters; confirm with Collaborator or timing |
+| **Business logic** | Cart, checkout, coupon, workflow skip |
+| **GraphQL** | `/graphql`, introspection, nested IDs |
+| **XSS** | Reflected/stored input; use `fuzz_request` reflection flags |
+| **SQLi** | Parameterized queries; error / timing / OOB detection only |
+| **Open redirect / HPP** | `next=`, `returnUrl`, duplicate parameters |
+| **Reporting** | Turn current issues into a client-ready write-up |
+
+### How auto-attach works
+
+1. **Your message wins.** “Test IDOR on /users” loads **IDOR / BOLA** immediately.
+2. **Otherwise, if you asked to test** (or *Send to Cybernexis*), Cybernexis scores the focus host:
+   - Sitemap paths (`/graphql`, `/oauth/authorize`, `/users/42`, `?url=`, cart/checkout, …)
+   - Burp issue names (“SQL injection”, “Cross-site scripting”, “External service interaction”, …)
+   - HTTP request/response (GraphQL body, `Authorization: Bearer eyJ…`)
+   - Target memory token kinds (JWT)
+3. The **strongest** class is attached if it clears a minimum score. A lone `?q=` search box is not enough to start XSS/SQLi.
+4. Weaker classes stay in **Surface hints** inside the system prompt so the model can continue after the current pass.
+
+Auto-attach does **not** run if:
+
+- The question is inspect-only (*What's in scope?*, *list the sitemap*, *list issues*)
+- You already picked a playbook from the `+` menu (it stays pinned)
+- The task has no focus host and you did not name a URL (avoids scoring the whole project)
+
+Playbooks tell the model to start that class (read-only first, then confirm). They do **not** bypass Manual/Smart approvals. High-impact tools still need your OK unless the session is in Auto.
+
 ## Model providers
 
 | Protocol | Default base URL | Authentication | Endpoint |
@@ -112,9 +169,9 @@ Enable **Block action tools targeting out-of-scope hosts** in Settings unless yo
 | **OpenAI-compatible** | `https://api.openai.com` | Bearer token | `/v1/chat/completions` |
 | **Anthropic Messages** | `https://api.anthropic.com` | `x-api-key` token | `/v1/messages` |
 
-Custom base URLs are supported, including gateways and self-hosted OpenAI-compatible servers. Chat and model-list endpoints are configured independently and accept either a relative path or a complete URL. A base URL may include the trailing `/v1`; Cybernexis avoids adding it twice.
+Custom base URLs are supported, including gateways and self-hosted OpenAI-compatible servers. Chat and model-list paths follow the selected protocol; override them in **Advanced** if a gateway uses a different path. A base URL may include the trailing `/v1`; Cybernexis avoids adding it twice.
 
-For example, DeepSeek's OpenAI-compatible API uses base URL `https://api.deepseek.com`, chat endpoint `/chat/completions`, and models endpoint `/models`. Its Anthropic-compatible API can instead use protocol **Anthropic Messages**, base URL `https://api.deepseek.com/anthropic`, and chat endpoint `/v1/messages`.
+For example, DeepSeek's OpenAI-compatible API uses protocol **OpenAI-compatible** and base URL `https://api.deepseek.com`. Its Anthropic-compatible API uses protocol **Anthropic Messages** and base URL `https://api.deepseek.com/anthropic`.
 
 API tokens are masked in the Settings UI and stored in Burp's extension preferences. Treat the Burp user profile as sensitive. Remote providers receive model prompts, tool results, and any Burp traffic included in those prompts. Review your provider's data policy before using remote models with confidential targets.
 
@@ -136,7 +193,8 @@ The model only calls names from the live catalog. Highlights:
 
 Persisted in Burp preferences (survives reload):
 
-- Provider protocol, base URL, chat/models endpoints, model, API token, temperature, max tokens / steps / timeout
+- Provider protocol, base URL, model, API token, temperature, max tokens / steps / timeout
+- Chat/model-list endpoints (Advanced)
 - Context budget (characters kept per turn)
 - Default approval mode
 - Scope enforcement
