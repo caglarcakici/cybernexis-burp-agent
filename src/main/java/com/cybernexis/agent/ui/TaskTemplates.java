@@ -1,7 +1,8 @@
 /*
  * Built-in task templates: a name plus system-prompt instructions that steer a
  * session toward a particular kind of engagement. Selecting one when creating a
- * task seeds the agent's system prompt.
+ * task seeds the agent's system prompt. Playbooks (vuln-class checklists) live
+ * in Playbooks and appear under a submenu.
  */
 package com.cybernexis.agent.ui;
 
@@ -10,20 +11,34 @@ import java.util.List;
 
 public final class TaskTemplates {
 
+    public static final String GROUP_ENGAGEMENT = "Engagement";
+
     public static final class Template {
         public final String name;
+        public final String group;
         public final String instructions;
+        public final String[] keywords;
 
         public Template(String name, String instructions) {
+            this(name, GROUP_ENGAGEMENT, instructions, new String[0]);
+        }
+
+        public Template(String name, String group, String instructions, String[] keywords) {
             this.name = name;
-            this.instructions = instructions;
+            this.group = group == null ? GROUP_ENGAGEMENT : group;
+            this.instructions = instructions == null ? "" : instructions;
+            this.keywords = keywords == null ? new String[0] : keywords;
+        }
+
+        public boolean isPlaybook() {
+            return Playbooks.GROUP.equals(group);
         }
     }
 
     private TaskTemplates() {
     }
 
-    public static List<Template> defaults() {
+    public static List<Template> engagements() {
         List<Template> list = new ArrayList<>();
         list.add(new Template("Blank", ""));
         list.add(new Template("Web App Vulnerability Testing",
@@ -46,6 +61,13 @@ public final class TaskTemplates {
                 "Review the audit issues already present in Burp. Group them by severity and type, remove likely "
                         + "false positives with justification, and produce a prioritized remediation list with "
                         + "concrete evidence drawn from the stored HTTP messages."));
+        return list;
+    }
+
+    /** Engagement templates plus playbooks, Blank first. */
+    public static List<Template> defaults() {
+        List<Template> list = new ArrayList<>(engagements());
+        list.addAll(Playbooks.all());
         return list;
     }
 }

@@ -106,11 +106,19 @@ public class ChatView extends JPanel implements SessionPanel.Host {
 
     private void showTemplateMenu(Component anchor) {
         javax.swing.JPopupMenu menu = new javax.swing.JPopupMenu();
-        for (TaskTemplates.Template t : TaskTemplates.defaults()) {
+        for (TaskTemplates.Template t : TaskTemplates.engagements()) {
             javax.swing.JMenuItem item = new javax.swing.JMenuItem(t.name);
             item.addActionListener(e -> newSession(t));
             menu.add(item);
         }
+        menu.addSeparator();
+        javax.swing.JMenu playbooks = new javax.swing.JMenu("Playbooks");
+        for (TaskTemplates.Template t : Playbooks.all()) {
+            javax.swing.JMenuItem item = new javax.swing.JMenuItem(t.name);
+            item.addActionListener(e -> newSession(t));
+            playbooks.add(item);
+        }
+        menu.add(playbooks);
         menu.show(anchor, 0, anchor.getHeight());
     }
 

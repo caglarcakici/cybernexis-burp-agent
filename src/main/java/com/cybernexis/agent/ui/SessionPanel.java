@@ -88,6 +88,8 @@ public class SessionPanel extends JPanel implements AgentLoop.Listener {
     private volatile OllamaClient.CancelToken cancelToken;
     private volatile Mode mode;
     private String templateName = "Blank";
+    /** True when the user picked a playbook from the + menu (do not auto-replace it). */
+    private boolean playbookPinned;
 
     // Persisted display log (independent of the model conversation).
     private final java.util.List<Map<String, Object>> log = new java.util.ArrayList<>();
@@ -297,6 +299,7 @@ public class SessionPanel extends JPanel implements AgentLoop.Listener {
             agentLoop.setFocusHost(inferred);
             showFocusChip(inferred);
         }
+        maybeAttachPlaybook(text, null);
         if (session != null) {
             session.requestCount++;
             if (session.requestCount == 1) {
@@ -360,15 +363,70 @@ public class SessionPanel extends JPanel implements AgentLoop.Listener {
 
     public void applyTemplate(String name, String instructions) {
         this.templateName = name == null ? "Blank" : name;
+        this.playbookPinned = Playbooks.isPlaybook(this.templateName);
         agentLoop.setSystemAddendum(instructions);
         if (instructions != null && !instructions.trim().isEmpty()) {
-            Chip chip = new Chip("Template \u00b7 " + this.templateName, Theme.accent(),
-                    Theme.blend(Theme.surface(), Theme.accent(), 0.16));
-            JPanel row = new JPanel(new BorderLayout());
-            row.setOpaque(false);
-            row.add(chip, BorderLayout.WEST);
-            transcript.addRow(row);
+            String prefix = playbookPinned ? "Playbook" : "Template";
+            showInfoChip(prefix + " \u00b7 " + this.templateName, Theme.accent());
         }
+    }
+
+    /**
+     * If this task is still a generic engagement, attach the playbook that best
+     * matches the user's text, or — when they asked to test — Burp surface hints
+     * (sitemap, issues, HTTP, token map). Explicit playbook picks are left alone.
+     */
+    public void maybeAttachPlaybook(String text) {
+        maybeAttachPlaybook(text, null);
+    }
+
+    public void maybeAttachPlaybook(String text, burp.api.montoya.http.message.HttpRequestResponse seed) {
+        if (playbookPinned) {
+            return;
+        }
+        TaskTemplates.Template playbook = Playbooks.match(text);
+        String reason = "from your message";
+        if (playbook == null && (seed != null || Playbooks.looksLikeTestIntent(text))) {
+            try {
+                ctx.messages.refresh(ctx.api);
+            } catch (RuntimeException ignored) {
+            }
+            com.cybernexis.agent.tools.SurfaceHints.Report hints =
+                    com.cybernexis.agent.tools.SurfaceHints.scan(ctx, agentLoop.getFocusHost(), seed);
+            if (hints.strongEnough()) {
+                playbook = Playbooks.fromHintName(hints.top().playbook);
+                reason = hints.top().evidence.isEmpty()
+                        ? "from Burp state"
+                        : hints.top().evidence.get(0);
+            }
+        }
+        if (playbook == null) {
+            return;
+        }
+        String current = agentLoop.getSystemAddendum();
+        if (Playbooks.alreadyApplied(current, playbook)) {
+            return;
+        }
+        String merged = (current == null || current.isBlank())
+                ? playbook.instructions
+                : current.trim() + "\n\n" + playbook.instructions;
+        agentLoop.setSystemAddendum(merged);
+        if ("Blank".equals(templateName) || templateName == null || templateName.isEmpty()) {
+            templateName = playbook.name;
+        }
+        if (reason.length() > 72) {
+            reason = reason.substring(0, 69) + "...";
+        }
+        showInfoChip("Playbook \u00b7 " + playbook.name + " \u00b7 " + reason, Theme.accent());
+        notifyHost();
+    }
+
+    private void showInfoChip(String label, java.awt.Color accent) {
+        Chip chip = new Chip(label, accent, Theme.blend(Theme.surface(), accent, 0.16));
+        JPanel row = new JPanel(new BorderLayout());
+        row.setOpaque(false);
+        row.add(chip, BorderLayout.WEST);
+        transcript.addRow(row);
     }
 
     /** Seed a session created from a right-click "Send to Cybernexis" on a request. */
@@ -395,6 +453,7 @@ public class SessionPanel extends JPanel implements AgentLoop.Listener {
             }
         } catch (RuntimeException ignored) {
         }
+        maybeAttachPlaybook(label, hrr);
         input.setText("Analyze the HTTP request/response with message_id " + id
                 + " for security vulnerabilities. Start by inspecting it, then test the most promising issues.");
         input.requestFocusInWindow();
@@ -436,6 +495,15 @@ public class SessionPanel extends JPanel implements AgentLoop.Listener {
         this.mode = restoredMode == null ? this.mode : restoredMode;
         modeCombo.setSelectedItem(this.mode);
         this.templateName = template == null ? "Blank" : template;
+        this.playbookPinned = Playbooks.isPlaybook(this.templateName);
+        if (!playbookPinned && instructions != null) {
+            for (TaskTemplates.Template p : Playbooks.all()) {
+                if (Playbooks.alreadyApplied(instructions, p)) {
+                    playbookPinned = true;
+                    break;
+                }
+            }
+        }
         agentLoop.setSystemAddendum(instructions);
         agentLoop.setFocusHost(focusHost);
         agentLoop.restoreVariables(variables);
