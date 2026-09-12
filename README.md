@@ -13,31 +13,9 @@ With local Ollama, prompts stay on your machine. Remote providers receive the pr
 
 It is **not** an LLM. You bring a tool-capable model through Ollama, an OpenAI-compatible endpoint, or Anthropic. It is **not** affiliated with PortSwigger.
 
-```mermaid
-flowchart TD
-    U([Security Analyst])
-
-    subgraph C[Cybernexis Burp Agent]
-        UI[Chat and Task Sessions]
-        PB[Playbook / surface hints]
-        LOOP[Agent Loop]
-        TOOLS[Security Tools]
-
-        UI --> PB
-        PB --> LOOP
-        LOOP --> TOOLS
-        TOOLS --> LOOP
-    end
-
-    O[Selected Model Provider]
-    B[Burp Suite Professional]
-
-    U --> UI
-    B -->|Sitemap, issues, HTTP, tokens| PB
-    LOOP <-->|Prompts and tool calls| O
-    TOOLS <-->|Montoya API| B
-    B -->|Traffic and findings| LOOP
-```
+<p align="center">
+  <img src="docs/architecture.svg" alt="Cybernexis architecture: analyst to chat, playbooks and surface hints, agent loop, model provider, and Burp Suite" width="880">
+</p>
 
 ## Screenshots
 
