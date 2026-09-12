@@ -57,7 +57,10 @@ public class PromptBuilder {
           .append("11. TARGET MEMORY is durable per host across tasks. After you learn login_path, csrf_field, ")
           .append("session_cookie, tech, or an interesting endpoint, call remember. scan_tokens on a stored message ")
           .append("fills the Token Map (JWT/UUID/API key/CSRF locations). Do not rediscover facts already listed ")
-          .append("under TARGET MEMORY. Token VALUES expire — re-extract with extract_from_response before sending.\n\n");
+          .append("under TARGET MEMORY. Token VALUES expire — re-extract with extract_from_response before sending.\n")
+          .append("12. SURFACE HINTS (sitemap / issues / HTTP / tokens) name likely vuln classes. ")
+          .append("If the user asked to test or analyze, or sent a request, follow the strongest hinted playbook: ")
+          .append("read-only first, then confirm. Do not ignore a playbook already attached to this task.\n\n");
 
         sb.append("TOOL CATALOG (use these names EXACTLY)\n");
         List<ToolDescriptor> readonly = new ArrayList<>();
@@ -167,6 +170,10 @@ public class PromptBuilder {
             }
         }
         sb.append(ctx.memory().promptBlock(focus));
+        try {
+            sb.append(com.cybernexis.agent.tools.SurfaceHints.scan(ctx, null).promptBlock());
+        } catch (RuntimeException ignored) {
+        }
         return sb.toString();
     }
 
