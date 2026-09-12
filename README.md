@@ -14,7 +14,7 @@ With local Ollama, prompts stay on your machine. Remote providers receive the pr
 It is **not** an LLM. You bring a tool-capable model through Ollama, an OpenAI-compatible endpoint, or Anthropic. It is **not** affiliated with PortSwigger.
 
 <p align="center">
-  <img src="docs/architecture.svg" alt="Cybernexis architecture: analyst to chat, playbooks and surface hints, agent loop, model provider, and Burp Suite" width="880">
+  <img src="docs/screenshots/architecture.svg" alt="Cybernexis architecture: analyst to chat, playbooks and surface hints, agent loop, model provider, and Burp Suite" width="880">
 </p>
 
 ## Screenshots
