@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="620" viewBox="0 0 1120 620" role="img" aria-labelledby="title desc">
+  <title id="title">Cybernexis Agent architecture</title>
+  <desc id="desc">The analyst uses chat. Playbooks and surface hints steer the agent loop. The loop talks to a model provider and drives Burp tools. Burp feeds sitemap, issues, HTTP, and tokens back into the playbook hints.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1.2 L 9 5 L 0 8.8 z" fill="#9aa3b2"/>
+    </marker>
+    <marker id="arrowOrange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1.2 L 9 5 L 0 8.8 z" fill="#ff6633"/>
+    </marker>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1.2 L 9 5 L 0 8.8 z" fill="#6ea8fe"/>
+    </marker>
+  </defs>
+
+  <rect width="1120" height="620" rx="24" fill="#12141a"/>
+
+  <!-- Analyst -->
+  <rect x="40" y="268" width="168" height="100" rx="18" fill="#262b33" stroke="#3d4450"/>
+  <text x="124" y="314" text-anchor="middle" fill="#f4f6f8" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="20" font-weight="700">Analyst</text>
+  <text x="124" y="340" text-anchor="middle" fill="#9aa3b2" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13">asks to test a host</text>
+
+  <line x1="208" y1="318" x2="268" y2="318" stroke="#9aa3b2" stroke-width="1.8" marker-end="url(#arrow)"/>
+
+  <!-- Agent frame -->
+  <rect x="272" y="36" width="480" height="548" rx="24" fill="#1a1f27" stroke="#ff6633" stroke-width="1.7"/>
+  <text x="512" y="78" text-anchor="middle" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="24" font-weight="700">Cybernexis Agent</text>
+  <text x="512" y="102" text-anchor="middle" fill="#9aa3b2" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="14">Burp Suite extension</text>
+
+  <rect x="304" y="128" width="416" height="72" rx="14" fill="#2a3038"/>
+  <text x="512" y="172" text-anchor="middle" fill="#f4f6f8" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" font-weight="600">Chat and tasks</text>
+
+  <line x1="512" y1="200" x2="512" y2="228" stroke="#9aa3b2" stroke-width="1.8" marker-end="url(#arrow)"/>
+
+  <rect x="304" y="228" width="416" height="88" rx="14" fill="#2a3038"/>
+  <text x="512" y="266" text-anchor="middle" fill="#f4f6f8" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" font-weight="600">Playbooks and surface hints</text>
+  <text x="512" y="292" text-anchor="middle" fill="#9aa3b2" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13">IDOR, JWT, SSRF, GraphQL, and more</text>
+
+  <line x1="512" y1="316" x2="512" y2="344" stroke="#9aa3b2" stroke-width="1.8" marker-end="url(#arrow)"/>
+
+  <rect x="304" y="344" width="416" height="72" rx="14" fill="#2a3038"/>
+  <text x="512" y="388" text-anchor="middle" fill="#f4f6f8" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" font-weight="600">Agent loop</text>
+
+  <line x1="504" y1="416" x2="504" y2="452" stroke="#9aa3b2" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <line x1="520" y1="452" x2="520" y2="416" stroke="#9aa3b2" stroke-width="1.8" marker-end="url(#arrow)"/>
+
+  <rect x="304" y="452" width="416" height="88" rx="14" fill="#2a3038"/>
+  <text x="512" y="492" text-anchor="middle" fill="#f4f6f8" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" font-weight="600">Burp tools</text>
+  <text x="512" y="516" text-anchor="middle" fill="#9aa3b2" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13">send, fuzz, issues, Collaborator</text>
+
+  <!-- Model -->
+  <rect x="820" y="328" width="264" height="104" rx="18" fill="#262b33" stroke="#3d4450"/>
+  <text x="952" y="372" text-anchor="middle" fill="#f4f6f8" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" font-weight="700">Model provider</text>
+  <text x="952" y="400" text-anchor="middle" fill="#9aa3b2" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13">Ollama, OpenAI, or Anthropic</text>
+
+  <line x1="720" y1="380" x2="818" y2="380" stroke="#ff6633" stroke-width="1.8" marker-end="url(#arrowOrange)"/>
+  <line x1="818" y1="396" x2="720" y2="396" stroke="#ff6633" stroke-width="1.8" marker-end="url(#arrowOrange)"/>
+  <text x="770" y="320" text-anchor="middle" fill="#ff8a5b" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12">prompts and tool calls</text>
+
+  <!-- Burp -->
+  <rect x="820" y="452" width="264" height="104" rx="18" fill="#262b33" stroke="#3d4450"/>
+  <text x="952" y="496" text-anchor="middle" fill="#f4f6f8" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" font-weight="700">Burp Suite</text>
+  <text x="952" y="522" text-anchor="middle" fill="#9aa3b2" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13">Professional, Montoya API</text>
+
+  <line x1="720" y1="488" x2="818" y2="488" stroke="#9aa3b2" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <line x1="818" y1="504" x2="720" y2="504" stroke="#9aa3b2" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <text x="770" y="580" text-anchor="middle" fill="#9aa3b2" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12">traffic and findings</text>
+
+  <!-- Live state: Burp up to playbooks -->
+  <path d="M 952 452 L 952 272 L 720 272" fill="none" stroke="#6ea8fe" stroke-width="1.7" marker-end="url(#arrowBlue)"/>
+  <text x="868" y="256" text-anchor="middle" fill="#8bb4ff" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12">sitemap, issues, HTTP, tokens</text>
+</svg>
